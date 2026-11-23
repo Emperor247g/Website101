@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#0b0705" />
+  <meta name="description"
+    content="Crown & Oak — a premium 3D wooden checkers game with a thoughtful computer opponent." />
+  <title>Crown &amp; Oak — Tabletop Checkers</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+  <div id="app" class="app">
+    <canvas id="scene" aria-label="3D wooden checkers board"></canvas>
+    <div class="scene-vignette" aria-hidden="true"></div>
+    <div class="film-grain" aria-hidden="true"></div>
+
+    <header class="brand" aria-label="Crown and Oak checkers">
+      <svg class="brand-crown" viewBox="0 0 44 34" aria-hidden="true">
+        <path d="M4 28h36M6 24l-2-17 10 7L22 3l8 11 10-7-2 17H6Z" fill="none" stroke="currentColor" stroke-width="1.6"
+          stroke-linejoin="round" />
+        <path d="M9 26h26" stroke="currentColor" stroke-width="1.2" />
+      </svg>
+      <div class="brand-copy">
+        <span class="brand-name">Crown <i>&amp;</i> Oak</span>
+        <span class="brand-sub">Tabletop Checkers</span>
+      </div>
+    </header>
+
+    <aside class="control-rail control-rail--left" aria-label="Game controls">
+      <button id="btnMenu" class="icon-btn" type="button" data-tooltip="Menu" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
+      <button id="btnRestart" class="icon-btn" type="button" data-tooltip="Restart" aria-label="Restart game">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.2 6.4M20 5v6h-6" />
+        </svg>
+      </button>
+      <button id="btnPause" class="icon-btn" type="button" data-tooltip="Pause" aria-label="Pause game">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 5v14M16 5v14" />
+        </svg>
+      </button>
+    </aside>
+
+    <aside class="control-rail control-rail--right" aria-label="Assistance controls">
+      <button id="btnUndo" class="icon-btn" type="button" data-tooltip="Undo" aria-label="Undo last move">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 7 4 12l5 5M4 12h9a6 6 0 0 1 6 6v1" />
+        </svg>
+      </button>
+      <button id="btnInfo" class="icon-btn" type="button" data-tooltip="Information" aria-label="Show game information">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 11v5M12 8.2h.01" />
+        </svg>
+      </button>
+      <button id="btnHint" class="icon-btn" type="button" data-tooltip="Hint" aria-label="Show a hint">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M9.4 18h5.2M10 21h4M8.2 14.8A6.5 6.5 0 1 1 15.8 14.8c-.9.7-1.3 1.5-1.3 2.2H9.5c0-.7-.4-1.5-1.3-2.2Z" />
+          <path d="M12 4.5v1.2M6.7 7l.8.8M17.3 7l-.8.8" />
+        </svg>
+      </button>
+    </aside>
+
+    <div class="status-dock" role="status" aria-live="polite">
+      <div class="status-meta" id="statusMeta">
+        <span id="difficultyLabel">HARD LEVEL</span>
+        <span class="meta-sep">•</span>
+        <span>WHITE <strong id="whiteCount">12</strong></span>
+        <span class="meta-sep">•</span>
+        <span>BLACK <strong id="blackCount">12</strong></span>
+      </div>
+      <div class="status-turn">
+        <span id="turnDot" class="turn-dot turn-dot--white" aria-hidden="true"></span>
+        <span id="statusText">Your turn</span>
+        <span class="status-instruction" id="statusInstruction">Select a piece to begin</span>
+      </div>
+    </div>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Main menu -->
+    <div id="menuOverlay" class="overlay" hidden>
+      <aside class="menu-panel" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+        <div class="menu-header">
+          <div class="menu-brand">
+            <svg viewBox="0 0 44 34" aria-hidden="true">
+              <path d="M4 28h36M6 24l-2-17 10 7L22 3l8 11 10-7-2 17H6Z" fill="none" stroke="currentColor"
+                stroke-width="1.5" stroke-linejoin="round" />
+            </svg>
+            <div>
+              <h2 id="menuTitle">Crown <i>&amp;</i> Oak</h2>
+              <p>Tabletop Checkers</p>
+            </div>
+          </div>
+          <button id="menuClose" class="icon-btn icon-btn--small" type="button" aria-label="Close menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 6 12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="menu-scroll">
+          <section class="menu-section">
+            <p class="eyebrow">Match</p>
+            <button id="menuNewGame" class="menu-action menu-action--primary" type="button">
+              <span class="menu-action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </span>
+              <span>
+                <strong>New Game</strong>
+                <small>Reset the board and begin again</small>
+              </span>
+            </button>
+            <div class="mode-grid" role="group" aria-label="Game mode">
+              <button class="mode-card is-active" type="button" data-mode="ai">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="4" y="7" width="16" height="12" rx="3" />
+                  <path d="M9 3v4M15 3v4M8.5 12h.01M15.5 12h.01M9 16h6" />
+                </svg>
+                <span>Play Against Computer</span>
+                <small>Study the opponent</small>
+              </button>
+              <button class="mode-card" type="button" data-mode="pvp">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="8.5" cy="9" r="2.7" />
+                  <circle cx="15.5" cy="9" r="2.7" />
+                  <path d="M3.5 19c.5-3 2.4-4.7 5-4.7s4.5 1.7 5 4.7M12 19c.5-3 2.4-4.7 5-4.7s4.1 1.7 4.5 4.7" />
+                </svg>
+                <span>Two Player Mode</span>
+                <small>Share the table</small>
+              </button>
+              <button class="mode-card mode-card--online" type="button" data-mode="online">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3.5 12h17M12 3c2.7 2.5 4 5.6 4 9s-1.3 6.5-4 9c-2.7-2.5-4-5.6-4-9s1.3-6.5 4-9Z" />
+                </svg>
+                <span>Play Online</span>
+                <small>Invite a friend by room code</small>
+              </button>
+            </div>
+          </section>
+
+          <section class="menu-section" id="difficultySection">
+            <div class="section-heading">
+              <p class="eyebrow">Difficulty</p>
+              <span class="section-value" id="menuDifficultyValue">Hard</span>
+            </div>
+            <div class="segmented" role="group" aria-label="Difficulty level">
+              <button type="button" data-difficulty="easy">Easy</button>
+              <button type="button" data-difficulty="medium">Medium</button>
+              <button type="button" data-difficulty="hard" class="is-active">Hard</button>
+            </div>
+            <p class="menu-note" id="difficultyNote">Deep search, forced captures and positional judgement.</p>
+          </section>
+
+          <section class="menu-section" id="onlineSection">
+            <div class="section-heading">
+              <p class="eyebrow">Online match</p>
+              <span class="section-value" id="onlineStatusValue">Offline</span>
+            </div>
+
+            <label class="field-label" for="onlineServer">Game server</label>
+            <input id="onlineServer" class="field-input" type="text" inputmode="url" spellcheck="false"
+              autocomplete="off" placeholder="wss://your-server.example" aria-label="Game server WebSocket URL" />
+            <p class="field-hint" id="onlineServerHint">WS or WSS URL. Local servers use ws://localhost:8787.</p>
+
+            <label class="field-label" for="onlineNickname">Display name</label>
+            <input id="onlineNickname" class="field-input" type="text" maxlength="24" autocomplete="nickname"
+              placeholder="Player" aria-label="Display name" />
+
+            <div class="online-actions">
+              <button id="onlineCreate" class="button button--cream button--compact" type="button">Create room</button>
+              <button id="onlineConnect" class="button button--ghost button--compact" type="button">Connect</button>
+            </div>
+
+            <label class="field-label field-label--joined" for="onlineCode">Join a room</label>
+            <div class="online-actions online-actions--join">
+              <input id="onlineCode" class="field-input field-input--code" type="text" maxlength="6"
+                inputmode="text" autocomplete="off" spellcheck="false" placeholder="ROOM CODE"
+                aria-label="Room code" />
+              <button id="onlineJoin" class="button button--ghost button--compact" type="button">Join</button>
+            </div>
+
+            <div id="onlineRoom" class="online-room" hidden>
+              <div class="online-room-head">
+                <span>Your room</span>
+                <strong id="onlineRoomCode">------</strong>
+              </div>
+              <div class="online-room-meta">
+                <span>You play <strong id="onlineColor">White</strong></span>
+                <span id="onlineOpponent">Waiting for opponent…</span>
+              </div>
+              <div class="online-actions">
+                <button id="onlineCopy" class="button button--ghost button--compact" type="button">Copy invite</button>
+                <button id="onlineRematch" class="button button--ghost button--compact" type="button" disabled>Rematch</button>
+              </div>
+              <button id="onlineLeave" class="button button--ghost button--compact" type="button">Leave room</button>
+            </div>
+
+            <p class="menu-note" id="onlineNote">Moves are validated by the game server. Undo and pause are not available
+              online.</p>
+          </section>
+
+          <section class="menu-section">
+            <div class="setting-row">
+              <span>
+                <span class="setting-title">Sound</span>
+                <span class="setting-sub">Wooden clicks and chimes</span>
+              </span>
+              <button id="soundToggle" class="switch is-on" type="button" role="switch" aria-checked="true"
+                aria-label="Toggle sound">
+                <span class="switch-thumb"></span>
+              </button>
+            </div>
+          </section>
+
+          <section class="menu-section menu-section--last">
+            <button id="menuInstructions" class="menu-list-button" type="button">
+              <span class="menu-action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M4 5.5h6a2 2 0 0 1 2 2V20a3 3 0 0 0-3-3H4V5.5ZM20 5.5h-6a2 2 0 0 0-2 2V20a3 3 0 0 1 3-3h5V5.5Z" />
+                </svg>
+              </span>
+              <span>
+                <strong>Game Instructions</strong>
+                <small>Rules, controls and subtleties</small>
+              </span>
+              <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 5 7 7-7 7" />
+              </svg>
+            </button>
+          </section>
+        </div>
+
+        <div class="menu-footer">
+          <button id="menuReturn" class="button button--cream" type="button">Return to Game</button>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Information -->
+    <div id="infoOverlay" class="overlay overlay--center" hidden>
+      <article class="dialog" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+        <button class="dialog-close icon-btn icon-btn--small" type="button" data-close-dialog="infoOverlay"
+          aria-label="Close information">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+        <p class="eyebrow">At the table</p>
+        <h2 id="infoTitle">About the game</h2>
+        <div class="info-current">
+          <div><span>Mode</span><strong id="infoMode">Play Against Computer</strong></div>
+          <div><span>Difficulty</span><strong id="infoDifficulty">Hard</strong></div>
+          <div><span>Turn</span><strong id="infoTurn">White</strong></div>
+          <div><span>Pieces</span><strong id="infoPieces">12 — 12</strong></div>
+        </div>
+        <p class="dialog-lede">A traditional American checkers game, set on an oak and walnut board with polished
+          ceramic pieces and hand-finished red crowns.</p>
+        <div class="rule-grid">
+          <div><span>01</span>
+            <p>Capture all opposing pieces, or leave your opponent with no legal move.</p>
+          </div>
+          <div><span>02</span>
+            <p>Captures are compulsory. Multi-jumps must be completed with the same piece.</p>
+          </div>
+          <div><span>03</span>
+            <p>Reach the far row to receive a king. Kings may move and capture one square in both directions.</p>
+          </div>
+          <div><span>04</span>
+            <p>Use Undo to step back. The Hint button quietly consults the engine.</p>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="button button--cream" type="button" data-close-dialog="infoOverlay">Back to the board</button>
+        </div>
+      </article>
+    </div>
+
+    <!-- Instructions -->
+    <div id="instructionsOverlay" class="overlay overlay--center" hidden>
+      <article class="dialog dialog--wide" role="dialog" aria-modal="true" aria-labelledby="instructionsTitle">
+        <button class="dialog-close icon-btn icon-btn--small" type="button" data-close-dialog="instructionsOverlay"
+          aria-label="Close instructions">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+        <p class="eyebrow">How to play</p>
+        <h2 id="instructionsTitle">American checkers</h2>
+        <div class="instructions-columns">
+          <section>
+            <h3>The object</h3>
+            <p>Occupy the opposing side of the board or remove every opposing piece. If a player has no legal move, the
+              game is lost.</p>
+            <h3>Moving</h3>
+            <p>Pieces rest on dark squares and move one square diagonally forward. A white piece moves up the board; a
+              black piece moves down. Kings move one square diagonally in either direction.</p>
+            <h3>Capturing</h3>
+            <p>Jump over an adjacent enemy piece into the empty square beyond. Captures are mandatory. If several
+              captures are available, any one may be chosen.</p>
+          </section>
+          <section>
+            <h3>Multi-jumps</h3>
+            <p>If a capture can continue, the same piece remains selected and you must choose another valid jump. You
+              cannot switch pieces mid-sequence.</p>
+            <h3>King promotion</h3>
+            <p>When a piece reaches the far row, it becomes a king and receives a raised metallic red crown. A newly
+              crowned king may continue a capture sequence.</p>
+            <h3>Draws</h3>
+            <p>A game is drawn after forty moves by each side without a capture or a man move, or when the same position
+              occurs three times.</p>
+          </section>
+        </div>
+        <div class="control-legend">
+          <div><span class="key-chip">Click</span><span>Select a piece or destination</span></div>
+          <div><span class="key-chip">U</span><span>Undo</span></div>
+          <div><span class="key-chip">H</span><span>Hint</span></div>
+          <div><span class="key-chip">P</span><span>Pause</span></div>
+        </div>
+        <div class="dialog-actions">
+          <button class="button button--cream" type="button" data-close-dialog="instructionsOverlay">Ready to
+            play</button>
+        </div>
+      </article>
+    </div>
+
+    <!-- Pause -->
+    <div id="pauseOverlay" class="overlay overlay--center" hidden>
+      <article class="dialog dialog--compact" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+        <div class="pause-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M8 5v14M16 5v14" />
+          </svg>
+        </div>
+        <h2 id="pauseTitle">The table is paused</h2>
+        <p class="dialog-lede">Take your time. The board will wait.</p>
+        <div class="dialog-actions dialog-actions--stack">
+          <button id="resumeButton" class="button button--cream" type="button">Resume Game</button>
+          <button id="pauseRestart" class="button button--ghost" type="button">Restart</button>
+        </div>
+      </article>
+    </div>
+
+    <!-- Game over -->
+    <div id="gameOverOverlay" class="overlay overlay--center" hidden>
+      <article class="dialog dialog--compact game-over-dialog" role="dialog" aria-modal="true"
+        aria-labelledby="gameOverTitle">
+        <div class="game-over-crown" id="gameOverCrown" aria-hidden="true">
+          <svg viewBox="0 0 64 48">
+            <path d="M7 39h50M10 34 6 10l16 11L32 4l10 17 16-11-4 24H10Z" fill="none" stroke="currentColor"
+              stroke-width="2.4" stroke-linejoin="round" />
+            <path d="M14 29h36" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+        </div>
+        <p class="eyebrow" id="gameOverEyebrow">The match is complete</p>
+        <h2 id="gameOverTitle">White wins</h2>
+        <p class="dialog-lede" id="gameOverMessage">A well-played game.</p>
+        <div class="game-over-stats">
+          <div><span>White</span><strong id="gameOverWhite">0</strong></div>
+          <div class="game-over-divider"></div>
+          <div><span>Black</span><strong id="gameOverBlack">0</strong></div>
+          <div class="game-over-divider"></div>
+          <div><span>Turns</span><strong id="gameOverTurns">0</strong></div>
+        </div>
+        <div class="dialog-actions dialog-actions--stack">
+          <button id="playAgainButton" class="button button--cream" type="button">Play Again</button>
+          <button id="reviewButton" class="button button--ghost" type="button">Review the Board</button>
+        </div>
+      </article>
+    </div>
+
+    <div id="loadingScreen" class="loading-screen">
+      <div class="loading-inner">
+        <svg class="loading-crown" viewBox="0 0 64 48" aria-hidden="true">
+          <path d="M7 39h50M10 34 6 10l16 11L32 4l10 17 16-11-4 24H10Z" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linejoin="round" />
+        </svg>
+        <p class="loading-title">Crown <i>&amp;</i> Oak</p>
+        <p class="loading-copy">Preparing the table…</p>
+        <div class="loading-discs" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>
+
+    <noscript>
+      <div class="noscript">This game needs JavaScript enabled to run.</div>
+    </noscript>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+
+</html>

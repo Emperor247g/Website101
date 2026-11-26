@@ -1,0 +1,21 @@
+{
+  "name": "crown-and-oak",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A premium 3D wooden checkers game with local, AI, WebSocket and Supabase Realtime online play.",
+  "scripts": {
+    "predev": "node tools/run-python.mjs tools/build-standalone.py && node tools/copy-worker.mjs",
+    "dev": "vite",
+    "standalone": "node tools/run-python.mjs tools/build-standalone.py",
+    "prebuild": "npm run standalone && node tools/copy-worker.mjs",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.2"
+  },
+  "devDependencies": {
+    "vite": "^8.4.0"
+  }
+}

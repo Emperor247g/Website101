@@ -7,10 +7,13 @@ The site is a Vite static build. The old `server/` WebSocket server is not used 
 1. Create a Supabase project.
 2. Open **Project Settings → API** and copy:
    - **Project URL**
-   - **anon public** key
-3. Open **Project Settings → API → Realtime** and make sure Realtime is enabled. No tables are required: rooms use Realtime Broadcast and Presence only.
+   - **anon public / publishable** key
+3. Open **Project Settings → API → Realtime** and make sure Realtime is enabled. No game tables are required: rooms use Realtime Broadcast and Presence only.
+4. Leave Realtime "Allow public access" enabled. The game uses public `crown-oak-<ROOM_CODE>` channels, so no database tables are needed. If your project has public access disabled or custom Realtime RLS, run `SUPABASE_SETUP.sql` in the SQL Editor to allow anon/authenticated Broadcast and Presence messages.
 
-> Use only the public anon key in browser environment variables. Never use a service-role key in Vercel frontend env vars.
+> Use only the public anon/publishable key in browser code and environment variables. Never use a service-role/secret key in Vercel frontend env vars or in `CrownAndOak.html`.
+
+The standalone `CrownAndOak.html` also uses these public Supabase values from `js/script.js`, loaded through the Supabase JS CDN before the game bundle. It still falls back to the WebSocket room fields when the CDN or Supabase is unavailable.
 
 ## 2. Vercel environment variables
 
@@ -59,7 +62,9 @@ This is client-validated, not server-authoritative. A determined player could mo
 ## 5. Files
 
 - `vite.config.js` — Vite config and build-time Supabase env injection.
+- `js/script.js` — public Supabase config bridge used by both hosted and standalone builds.
 - `js/supabase-net.js` — Supabase Realtime transport compatible with `js/net.js`.
+- `SUPABASE_SETUP.sql` — one-time Realtime policies required for remote rooms.
 - `tools/copy-worker.mjs` — copies runtime worker/standalone assets into the Vite build.
 - `vercel.json`, `.vercelignore`, `.env.example` — deployment configuration.
 

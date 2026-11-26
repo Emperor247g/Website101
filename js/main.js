@@ -24,6 +24,46 @@ const DIFFICULTY_NOTES = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const capitalize = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+const ONLINE_SERVER_HINT = $('#onlineServerHint')?.textContent || '';
+
+function getSupabaseConfig() {
+  const config = typeof __SUPABASE_CONFIG__ !== 'undefined' ? __SUPABASE_CONFIG__ : null;
+  return config && typeof config === 'object' ? config : {};
+}
+
+function supabaseConfigured() {
+  const config = getSupabaseConfig();
+  return Boolean(config.url && config.anonKey);
+}
+
+async function createNetClient(options) {
+  if (supabaseConfigured()) {
+    const { SupabaseNetClient } = await import('./supabase-net.js');
+    return new SupabaseNetClient({ ...options, config: getSupabaseConfig() });
+  }
+  return new NetClient(options);
+}
+
+function configureOnlineUI() {
+  const serverField = $('#onlineServer');
+  const serverLabel = document.querySelector('label[for="onlineServer"]');
+  const hint = $('#onlineServerHint');
+
+  if (supabaseConfigured()) {
+    if (serverField) serverField.hidden = true;
+    if (serverLabel) serverLabel.hidden = true;
+    if (els.onlineConnect) els.onlineConnect.hidden = true;
+    if (hint) hint.textContent = 'Online rooms use Supabase Realtime — no server URL is needed.';
+    if (els.onlineNote) {
+      els.onlineNote.textContent = 'Moves are validated by the room host. Undo and pause are not available in online matches.';
+    }
+  } else {
+    if (serverField) serverField.hidden = false;
+    if (serverLabel) serverLabel.hidden = false;
+    if (els.onlineConnect) els.onlineConnect.hidden = false;
+    if (hint) hint.textContent = ONLINE_SERVER_HINT;
+  }
+}
 
 function loadSettings() {
   const fallback = { mode: 'ai', difficulty: 'hard', sound: true };
@@ -307,6 +347,10 @@ function updateOnlineUI() {
 
   if (ui.mode !== 'online') {
     els.onlineNote.textContent = 'Choose Play Online to create or join a validated two-player match.';
+  } else if (supabaseConfigured()) {
+    els.onlineNote.textContent = inRoom
+      ? 'Moves are validated by the room host. Undo and pause are not available online.'
+      : 'Create a room and invite a friend, or enter their room code.';
   } else if (!ui.net?.url) {
     els.onlineNote.textContent = 'Enter the WebSocket server URL, then create or join a room.';
   } else if (!inRoom) {
@@ -804,22 +848,30 @@ function handleOnlineEvent(message) {
 
 async function connectOnline(action = 'connect', code = '') {
   if (!ui.net) return;
-  const raw = els.onlineServer.value.trim() || defaultServerUrl();
-  const url = normalizeServerUrl(raw);
-  if (!url) {
-    toast('Enter a valid ws:// or wss:// server URL');
-    els.onlineServer.focus();
-    return;
-  }
-
-  els.onlineServer.value = url;
-  saveOnlinePrefs({ server: url, nickname: els.onlineNickname.value.trim() });
+  const nickname = els.onlineNickname.value.trim() || 'Player';
   ui.netConnecting = true;
   ui.netStatus = 'connecting';
   updateUI();
 
   try {
-    await ui.net.connect(url);
+    if (supabaseConfigured()) {
+      saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() });
+      await ui.net.connect();
+    } else {
+      const raw = els.onlineServer.value.trim() || defaultServerUrl();
+      const url = normalizeServerUrl(raw);
+      if (!url) {
+        ui.netConnecting = false;
+        ui.netStatus = 'error';
+        updateUI();
+        toast('Enter a valid ws:// or wss:// server URL');
+        els.onlineServer.focus();
+        return;
+      }
+      els.onlineServer.value = url;
+      saveOnlinePrefs({ server: url, nickname: els.onlineNickname.value.trim() });
+      await ui.net.connect(url);
+    }
   } catch (error) {
     ui.netConnecting = false;
     ui.netStatus = 'error';
@@ -832,13 +884,13 @@ async function connectOnline(action = 'connect', code = '') {
   ui.netStatus = 'connected';
   updateUI();
 
-  const nickname = els.onlineNickname.value.trim() || 'Player';
   try {
     if (action === 'create') await ui.net.createRoom(nickname);
     else if (action === 'join') await ui.net.joinRoom(code, nickname);
-  } catch {
+  } catch (error) {
     ui.netConnecting = false;
     updateUI();
+    toast(error.message || 'Could not join the room');
   }
 }
 
@@ -872,7 +924,7 @@ async function copyInviteLink() {
   try {
     const url = new URL(location.href);
     url.searchParams.set('room', formatRoomCode(ui.net.code));
-    if (ui.net.url) url.searchParams.set('server', ui.net.url);
+    if (!supabaseConfigured() && ui.net.url) url.searchParams.set('server', ui.net.url);
     await navigator.clipboard.writeText(url.toString());
     toast('Invite link copied', { gold: true });
   } catch {
@@ -1634,17 +1686,20 @@ async function init() {
   sound = new SoundManager();
   sound.setEnabled(settings.sound);
 
-  ui.net = new NetClient({
+  const netOptions = {
     onEvent: handleOnlineEvent,
     onStatus: (status) => {
       ui.netStatus = status;
       updateUI();
     },
-  });
+  };
+  ui.net = await createNetClient(netOptions);
+
+  configureOnlineUI();
 
   const params = new URLSearchParams(location.search);
   const inviteRoom = formatRoomCode(params.get('room') || '').slice(0, 6);
-  const inviteServer = normalizeServerUrl(params.get('server') || '');
+  const inviteServer = supabaseConfigured() ? '' : normalizeServerUrl(params.get('server') || '');
   if (inviteServer) saveOnlinePrefs({ server: inviteServer });
   if (inviteRoom.length === 6) {
     ui.mode = 'online';
@@ -1653,7 +1708,9 @@ async function init() {
     els.onlineCode.value = inviteRoom;
   }
 
-  els.onlineServer.value = normalizeServerUrl(onlinePrefs.server) || defaultServerUrl();
+  if (!supabaseConfigured()) {
+    els.onlineServer.value = normalizeServerUrl(onlinePrefs.server) || defaultServerUrl();
+  }
   els.onlineNickname.value = onlinePrefs.nickname || '';
 
   try {
@@ -1675,7 +1732,7 @@ async function init() {
   if (inviteRoom.length === 6) {
     updateUI();
     connectOnline('join', inviteRoom);
-  } else if (ui.mode === 'online' && onlinePrefs.server) {
+  } else if (ui.mode === 'online' && (supabaseConfigured() || onlinePrefs.server)) {
     connectOnline('resume');
   }
 

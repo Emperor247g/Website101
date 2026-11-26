@@ -1,3 +1,4 @@
+import './script.js';
 import {
   BLACK,
   CheckersGame,
@@ -27,8 +28,13 @@ const capitalize = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 const ONLINE_SERVER_HINT = $('#onlineServerHint')?.textContent || '';
 
 function getSupabaseConfig() {
-  const config = typeof __SUPABASE_CONFIG__ !== 'undefined' ? __SUPABASE_CONFIG__ : null;
-  return config && typeof config === 'object' ? config : {};
+  const buildConfig = typeof __SUPABASE_CONFIG__ !== 'undefined' ? __SUPABASE_CONFIG__ : null;
+  if (buildConfig && typeof buildConfig === 'object' && buildConfig.url && buildConfig.anonKey) {
+    return buildConfig;
+  }
+  // The standalone build gets its public config from js/script.js at runtime.
+  const runtimeConfig = globalThis.__CROWN_OAK_SUPABASE_CONFIG__;
+  return runtimeConfig && typeof runtimeConfig === 'object' ? runtimeConfig : {};
 }
 
 function supabaseConfigured() {

@@ -26,6 +26,8 @@ const COMMAND_TYPES = new Set([
 const REQUEST_TIMEOUT = 8000;
 const MOVE_TIMEOUT = 8000;
 const RESUME_TIMEOUT = 2500;
+const REALTIME_SETUP_MESSAGE =
+  'Supabase Realtime blocked the room message. Enable public Realtime access or run SUPABASE_SETUP.sql, then reload.';
 
 function makeToken() {
   const bytes = new Uint8Array(24);
@@ -289,7 +291,7 @@ export class SupabaseNetClient {
       try {
         channel = this.client.channel(`crown-oak-${this.code}`, {
           config: {
-            broadcast: { self: true, ack: false },
+            broadcast: { self: true, ack: true },
             presence: { key: this.token },
           },
         });
@@ -380,7 +382,20 @@ export class SupabaseNetClient {
       return false;
     }
     try {
-      Promise.resolve(this.channel.send({ type: 'signal', payload })).catch(() => {});
+      Promise.resolve(
+        this.channel.send(
+          { type: 'broadcast', event: 'signal', payload },
+          { timeout: REQUEST_TIMEOUT },
+        ),
+      )
+        .then((result) => {
+          if (result === 'error' || result === 'timed out') {
+            this._emit({ type: 'error', ok: false, message: REALTIME_SETUP_MESSAGE });
+          }
+        })
+        .catch(() => {
+          this._emit({ type: 'error', ok: false, message: REALTIME_SETUP_MESSAGE });
+        });
       return true;
     } catch {
       return false;
@@ -406,7 +421,7 @@ export class SupabaseNetClient {
         else resolve(value);
       };
       const timer = window.setTimeout(() => {
-        finish(new Error('The room host did not respond'));
+        finish(new Error(`The room host did not respond. ${REALTIME_SETUP_MESSAGE}`));
       }, timeoutMs);
       this.pendingRequests.set(id, { finish, timer });
 

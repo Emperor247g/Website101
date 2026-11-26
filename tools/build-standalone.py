@@ -60,6 +60,13 @@ MODULE_IDS = {
 def module_source(module_id: str, rel_path: str) -> str:
     path = (ROOT / rel_path).resolve()
     source = path.read_text(encoding="utf-8")
+    if rel_path == "js/main.js":
+        # Supabase is only bundled into the hosted build. The standalone file
+        # has no credentials, so the dormant dynamic import becomes a stub.
+        source = source.replace(
+            "await import('./supabase-net.js')",
+            "await __importSupabaseNet()",
+        )
     exports: list[str] = []
 
     def replace_import(match: re.Match[str]) -> str:
@@ -193,6 +200,10 @@ def main() -> None:
         "(function () {\n"
         "  'use strict';\n"
         f"  const __STANDALONE_AI_WORKER_SOURCE__ = {json.dumps(worker_source)};\n"
+        "  const __SUPABASE_CONFIG__ = {};\n"
+        "  async function __importSupabaseNet() {\n"
+        "    throw new Error('Supabase online play is only available in the hosted build.');\n"
+        "  }\n"
         "  const __modules = Object.create(null);\n"
         "  function __register(id, factory) {\n"
         "    const exports = {};\n"

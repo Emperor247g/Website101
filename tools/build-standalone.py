@@ -37,6 +37,8 @@ MODULES = [
     ("ai-client", "js/ai-client.js"),
     ("audio", "js/audio.js"),
     ("net", "js/net.js"),
+    ("supabaseConfig", "js/script.js"),
+    ("supabaseNet", "js/supabase-net.js"),
     ("main", "js/main.js"),
 ]
 
@@ -61,8 +63,8 @@ def module_source(module_id: str, rel_path: str) -> str:
     path = (ROOT / rel_path).resolve()
     source = path.read_text(encoding="utf-8")
     if rel_path == "js/main.js":
-        # Supabase is only bundled into the hosted build. The standalone file
-        # has no credentials, so the dormant dynamic import becomes a stub.
+        # Classic scripts have no dynamic import, so point the Supabase client
+        # loader at the module registered inside the standalone bundle.
         source = source.replace(
             "await import('./supabase-net.js')",
             "await __importSupabaseNet()",
@@ -71,6 +73,11 @@ def module_source(module_id: str, rel_path: str) -> str:
 
     def replace_import(match: re.Match[str]) -> str:
         specifier = match.group("path")[1:-1]
+        if specifier == "@supabase/supabase-js":
+            # The standalone file loads supabase-js from a CDN in script.js's
+            # bridge, so the module reads the browser global instead of a
+            # bundled npm dependency.
+            return "const { createClient } = globalThis.supabase || {};"
         dependency = (path.parent / specifier).resolve()
         dependency_id = MODULE_IDS.get(dependency)
         if dependency_id is None:
@@ -94,6 +101,12 @@ def module_source(module_id: str, rel_path: str) -> str:
             return f"const {{ {', '.join(entries)} }} = __modules[{dependency_id!r}];"
         return f"const {clause} = __modules[{dependency_id!r}].default;"
 
+    # Side-effect imports are already covered by module registration order.
+    side_effect_import = re.compile(
+        r"^[ \t]*import\s+['\"][^'\"]+['\"]\s*;?[ \t]*$",
+        re.MULTILINE,
+    )
+    source = side_effect_import.sub("", source)
     source = IMPORT_RE.sub(replace_import, source)
 
     def collect_export_list(match: re.Match[str]) -> str:
@@ -202,7 +215,11 @@ def main() -> None:
         f"  const __STANDALONE_AI_WORKER_SOURCE__ = {json.dumps(worker_source)};\n"
         "  const __SUPABASE_CONFIG__ = {};\n"
         "  async function __importSupabaseNet() {\n"
-        "    throw new Error('Supabase online play is only available in the hosted build.');\n"
+        "    const module = __modules['supabaseNet'];\n"
+        "    if (!module || !module.SupabaseNetClient) {\n"
+        "      throw new Error('Supabase Realtime is unavailable in this build.');\n"
+        "    }\n"
+        "    return module;\n"
         "  }\n"
         "  const __modules = Object.create(null);\n"
         "  function __register(id, factory) {\n"
@@ -222,7 +239,12 @@ def main() -> None:
     script_tag = '<script type="module" src="js/main.js"></script>'
     if script_tag not in html:
         raise SystemExit("index.html: module script tag not found")
-    html = html.replace(script_tag, f"<script>\n{bundle}</script>", 1)
+    supabase_tag = '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>'
+    html = html.replace(
+        script_tag,
+        f"{supabase_tag}\n<script>\n{bundle}</script>",
+        1,
+    )
 
     OUTPUT.write_text(html, encoding="utf-8")
     size = OUTPUT.stat().st_size

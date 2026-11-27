@@ -1,4 +1,4 @@
-import './script.js';
+import { createRoomViaRpc, joinRoomViaRpc } from './script.js';
 import {
   BLACK,
   CheckersGame,
@@ -859,6 +859,24 @@ async function connectOnline(action = 'connect', code = '') {
   ui.netStatus = 'connecting';
   updateUI();
 
+  // Optional database-backed rooms. Missing RPCs fall back to the Realtime flow.
+  let rpcResult = null;
+  if (supabaseConfigured() && (action === 'create' || action === 'join')) {
+    try {
+      const config = getSupabaseConfig();
+      rpcResult = action === 'create'
+        ? await createRoomViaRpc(config)
+        : await joinRoomViaRpc(code, config);
+      if (rpcResult?.code) code = rpcResult.code;
+    } catch (error) {
+      ui.netConnecting = false;
+      ui.netStatus = 'error';
+      updateUI();
+      toast(error.message || 'Supabase room request failed');
+      return;
+    }
+  }
+
   try {
     if (supabaseConfigured()) {
       saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() });
@@ -891,8 +909,8 @@ async function connectOnline(action = 'connect', code = '') {
   updateUI();
 
   try {
-    if (action === 'create') await ui.net.createRoom(nickname);
-    else if (action === 'join') await ui.net.joinRoom(code, nickname);
+    if (action === 'create') await ui.net.createRoom(nickname, rpcResult?.code || '');
+    else if (action === 'join') await ui.net.joinRoom(code, nickname, rpcResult?.data || null);
   } catch (error) {
     ui.netConnecting = false;
     updateUI();

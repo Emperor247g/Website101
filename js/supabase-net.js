@@ -49,6 +49,14 @@ function makeRoomCode() {
   return [...bytes].map((value) => CODE_ALPHABET[value % CODE_ALPHABET.length]).join('');
 }
 
+function normalizeRoomCode(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6);
+}
+
 function cleanNickname(value) {
   return String(value || '').trim().slice(0, 24) || 'Player';
 }
@@ -994,10 +1002,10 @@ export class SupabaseNetClient {
     }
   }
 
-  createRoom(nickname = '') {
+  createRoom(nickname = '', requestedCode = '') {
     if (this.inRoom) return Promise.reject(new Error('Leave your current room first'));
 
-    this.code = makeRoomCode();
+    this.code = normalizeRoomCode(requestedCode) || makeRoomCode();
     this.token = makeToken();
     this.color = WHITE;
     this.host = true;
@@ -1040,9 +1048,9 @@ export class SupabaseNetClient {
     });
   }
 
-  async joinRoom(code, nickname = '') {
+  async joinRoom(code, nickname = '', rpcData = null) {
     if (this.inRoom) throw new Error('Leave your current room first');
-    const clean = String(code || '').trim().toUpperCase();
+    const clean = normalizeRoomCode(code);
     if (!clean) throw new Error('Enter a room code');
 
     this.code = clean;

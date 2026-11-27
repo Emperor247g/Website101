@@ -1,16 +1,164 @@
-/**
- * Supabase bridge for Crown & Oak.
- *
- * The hosted Vite build injects credentials at build time. The single-file
- * CrownAndOak.html cannot do that, so this module publishes the public
- * Supabase settings to the game before main.js starts. It also adapts the
- * optional create_room / join_room RPCs used by database-backed room systems.
- *
- * The Supabase JS CDN script must load before this module in standalone mode.
- * When Supabase is unavailable, the game falls back to its WebSocket rooms.
- */
-
 import { createClient } from '@supabase/supabase-js';
+
+// ==============================
+// CHECKERS ONLINE ROOM SYSTEM
+// ==============================
+
+const createRoomBtn = document.getElementById("create-room-btn");
+const joinRoomBtn = document.getElementById("join-room-btn");
+const copyRoomCodeBtn = document.getElementById("copy-room-code-btn");
+
+const roomCodeInput = document.getElementById("room-code-input");
+const roomCodeDisplay = document.getElementById("room-code-display");
+const createdRoomDiv = document.getElementById("created-room");
+const roomStatus = document.getElementById("room-status");
+
+let currentRoom = null;
+// ==============================
+// REALTIME ROOM LISTENER
+// ==============================
+
+let roomChannel = null;
+
+function subscribeToRoom(roomId) {
+
+  // Remove any previous subscription
+  if (roomChannel) {
+    supabaseClient.removeChannel(roomChannel);
+  }
+
+  roomStatus.textContent = "Connecting to live game...";
+
+  roomChannel = supabaseClient
+    .channel("room-" + roomId)
+
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "matchrooms",
+        filter: "id=eq." + roomId
+      },
+      (payload) => {
+
+        // Updated room data from Supabase
+        currentRoom = payload.new;
+
+        console.log("Realtime room update:", payload.new);
+
+        if (payload.new.status === "playing") {
+          roomStatus.textContent = "Opponent connected! Game is ready.";
+        }
+
+        if (payload.new.status === "finished") {
+          roomStatus.textContent = "Game finished.";
+        }
+
+        // We'll connect the board rendering here in Step 10
+        if (typeof handleRoomUpdate === "function") {
+          handleRoomUpdate(payload.new);
+        }
+      }
+    )
+
+    .subscribe((status) => {
+      console.log("Realtime subscription status:", status);
+
+      if (status === "SUBSCRIBED") {
+        roomStatus.textContent = "Connected to live room.";
+      }
+
+      if (status === "CHANNEL_ERROR") {
+        roomStatus.textContent = "Realtime connection error.";
+      }
+    });
+}
+
+// Create room
+createRoomBtn.addEventListener("click", async () => {
+  roomStatus.textContent = "Creating room...";
+
+  const user = await authenticatePlayer();
+
+  if (!user) {
+    roomStatus.textContent = "Authentication failed.";
+    return;
+  }
+
+  const { data, error } = await supabaseClient.rpc("create_room");
+
+  if (error) {
+    console.error(error);
+    roomStatus.textContent = error.message;
+    return;
+  }
+
+  currentRoom = data;
+  subscribeToRoom(data.id);
+
+  roomCodeDisplay.textContent = data.room_code;
+  createdRoomDiv.style.display = "block";
+
+  roomStatus.textContent = "Room created! Waiting for another player.";
+
+  console.log("Created room:", data);
+});
+
+// Join room
+joinRoomBtn.addEventListener("click", async () => {
+  const code = roomCodeInput.value.trim().toUpperCase();
+
+  if (code.length !== 6) {
+    roomStatus.textContent = "Enter a valid 6-character room code.";
+    return;
+  }
+
+  roomStatus.textContent = "Joining room...";
+
+  const user = await authenticatePlayer();
+
+  if (!user) {
+    roomStatus.textContent = "Authentication failed.";
+    return;
+  }
+
+  const { data, error } = await supabaseClient.rpc("join_room", {
+    p_room_code: code
+  });
+
+  if (error) {
+    console.error(error);
+    roomStatus.textContent = error.message;
+    return;
+  }
+
+  currentRoom = data;
+  subscribeToRoom(data.id);
+
+  roomStatus.textContent = "You joined the room successfully!";
+
+  console.log("Joined room:", data);
+});
+
+// Copy room code
+copyRoomCodeBtn.addEventListener("click", async () => {
+  const code = roomCodeDisplay.textContent;
+
+  try {
+    await navigator.clipboard.writeText(code);
+    roomStatus.textContent = "Room code copied!";
+  } catch (error) {
+    roomStatus.textContent = "Unable to copy code.";
+    console.error(error);
+  }
+});
+
+// ==============================
+// CROWN & OAK COMPATIBILITY LAYER
+// ==============================
+// The room panel above uses bare `supabaseClient` / `authenticatePlayer()`.
+// main.js imports the helpers below, so both APIs stay available.
 
 const SUPABASE_URL = 'https://kfzjikhynazkojqxyyhw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_hOYd-U2WZFLIS0sloJJpfA_Bm84WsPt';
@@ -60,7 +208,7 @@ function getSupabaseClient(config = {}) {
 }
 
 async function authenticatePlayer(client) {
-  const supabase = client || getSupabaseClient();
+  const supabase = client || supabaseClient;
   if (!supabase) {
     console.error('Supabase is not available');
     return null;
@@ -113,7 +261,7 @@ function extractRoomCode(data, depth = 0) {
   }
 
   if (typeof data === 'object') {
-    for (const key of ['room_code', 'roomCode', 'code', 'room']) {
+    for (const key of ['room_code', 'roomCode', 'code', 'room', 'id']) {
       if (data[key] === null || data[key] === undefined) continue;
       const code = extractRoomCode(data[key], depth + 1);
       if (code && code.length === 6) return code;
@@ -137,18 +285,18 @@ function isMissingRpc(error) {
 }
 
 async function callRoomRpc(name, params, config) {
-  const supabase = getSupabaseClient(config);
-  if (!supabase) return null;
+  const client = getSupabaseClient(config);
+  if (!client) return null;
 
-  const user = await authenticatePlayer(supabase);
+  const user = await authenticatePlayer(client);
   if (!user) {
     console.info(`Supabase RPC ${name} skipped: anonymous authentication is unavailable.`);
     return null;
   }
 
   const { data, error } = params
-    ? await supabase.rpc(name, params)
-    : await supabase.rpc(name);
+    ? await client.rpc(name, params)
+    : await client.rpc(name);
 
   if (error) {
     if (isMissingRpc(error)) {
@@ -161,12 +309,10 @@ async function callRoomRpc(name, params, config) {
   return { data, code: extractRoomCode(data) };
 }
 
-/** Register a room with the optional Supabase create_room RPC. */
 async function createRoomViaRpc(config = {}) {
   return callRoomRpc('create_room', null, config);
 }
 
-/** Validate a room code with the optional Supabase join_room RPC. */
 async function joinRoomViaRpc(code, config = {}) {
   const clean = normalizeRoomCode(code);
   if (clean.length !== 6) {
@@ -177,7 +323,6 @@ async function joinRoomViaRpc(code, config = {}) {
   return result ? { ...result, code: result.code || clean } : null;
 }
 
-/** Copy a room code. Crown & Oak's #onlineCopy button copies a full invite link. */
 async function copyRoomCode(code) {
   const clean = normalizeRoomCode(code);
   if (clean.length !== 6) {
@@ -187,128 +332,26 @@ async function copyRoomCode(code) {
   return clean;
 }
 
-let currentRoom = null;
-
-function getRoomElements() {
-  return {
-    createBtn: document.getElementById('create-room-btn'),
-    joinBtn: document.getElementById('join-room-btn'),
-    copyBtn: document.getElementById('copy-room-code-btn'),
-    codeInput: document.getElementById('room-code-input'),
-    codeDisplay: document.getElementById('room-code-display'),
-    createdRoom: document.getElementById('created-room'),
-    status: document.getElementById('room-status'),
-  };
-}
-
-function setRoomStatus(message) {
-  const { status } = getRoomElements();
-  if (status) status.textContent = message;
-}
-
 function getCurrentRoom() {
   return currentRoom;
 }
 
-async function authenticateForRoom() {
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    setRoomStatus('Supabase is not available.');
-    return null;
-  }
-
-  const user = await authenticatePlayer(supabase);
-  if (!user) setRoomStatus('Authentication failed.');
-  return user;
-}
-
-/** Bind the optional RPC room panel. These IDs are separate from the main online controls. */
 function bindRoomControls() {
-  const els = getRoomElements();
-  const required = ['createBtn', 'joinBtn', 'copyBtn', 'codeInput', 'codeDisplay', 'createdRoom', 'status'];
-  if (required.some((key) => !els[key])) return;
-  if (els.createBtn.dataset.crownOakRoomBound === 'true') return;
-  els.createBtn.dataset.crownOakRoomBound = 'true';
-
-  els.createBtn.addEventListener('click', async () => {
-    setRoomStatus('Creating room...');
-    try {
-      const user = await authenticateForRoom();
-      if (!user) return;
-
-      const result = await createRoomViaRpc();
-      if (!result?.code) {
-        setRoomStatus('Database rooms are unavailable — use the main Create room button.');
-        return;
-      }
-
-      currentRoom = result.data;
-      els.codeDisplay.textContent = result.code;
-      els.createdRoom.hidden = false;
-      els.createdRoom.style.display = 'block';
-      setRoomStatus('Room created! Waiting for another player.');
-      console.log('Created room:', result.data);
-    } catch (error) {
-      console.error(error);
-      setRoomStatus(error.message || 'Unable to create room.');
-    }
-  });
-
-  els.joinBtn.addEventListener('click', async () => {
-    const code = normalizeRoomCode(els.codeInput.value);
-    if (code.length !== 6) {
-      setRoomStatus('Enter a valid 6-character room code.');
-      return;
-    }
-    els.codeInput.value = code;
-
-    setRoomStatus('Joining room...');
-    try {
-      const user = await authenticateForRoom();
-      if (!user) return;
-
-      const result = await joinRoomViaRpc(code);
-      if (!result) {
-        setRoomStatus('Database rooms are unavailable — use the main Join field.');
-        return;
-      }
-
-      currentRoom = result.data;
-      els.codeDisplay.textContent = result.code || code;
-      els.createdRoom.hidden = false;
-      els.createdRoom.style.display = 'block';
-      setRoomStatus('You joined the room successfully!');
-      console.log('Joined room:', result.data);
-    } catch (error) {
-      console.error(error);
-      setRoomStatus(error.message || 'Unable to join room.');
-    }
-  });
-
-  els.copyBtn.addEventListener('click', async () => {
-    const code = normalizeRoomCode(els.codeDisplay.textContent) || normalizeRoomCode(els.codeInput.value);
-    try {
-      await copyRoomCode(code);
-      setRoomStatus('Room code copied!');
-    } catch (error) {
-      setRoomStatus('Unable to copy code.');
-      console.error(error);
-    }
-  });
+  // The listeners above are bound when this module loads; this export exists
+  // so main.js and the standalone bundle can call it safely.
+  for (const button of [createRoomBtn, joinRoomBtn, copyRoomCodeBtn]) {
+    if (button) button.dataset.crownOakRoomBound = 'true';
+  }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', bindRoomControls, { once: true });
-} else {
-  bindRoomControls();
-}
+const supabaseClient = getSupabaseClient();
 
 if (globalThis.supabase?.createClient) {
-  // main.js reads this before it creates the Supabase Realtime transport.
   globalThis.__CROWN_OAK_SUPABASE_CONFIG__ = SUPABASE_CONFIG;
-  const supabaseClient = getSupabaseClient();
   if (supabaseClient) authenticatePlayer(supabaseClient);
 }
+
+bindRoomControls();
 
 export {
   SUPABASE_CONFIG,

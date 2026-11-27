@@ -1970,6 +1970,29 @@ button:focus-visible {
               <button id="onlineLeave" class="button button--ghost button--compact" type="button">Leave room</button>
             </div>
 
+            <div class="online-room" id="roomTools">
+              <div class="online-room-head">
+                <span>Database room</span>
+                <strong id="room-code-display">------</strong>
+              </div>
+              <p class="field-hint">Optional Supabase RPC room registration.</p>
+              <div class="online-actions">
+                <button id="create-room-btn" class="button button--cream button--compact" type="button">Create room</button>
+                <button id="join-room-btn" class="button button--ghost button--compact" type="button">Join room</button>
+              </div>
+              <label class="field-label field-label--joined" for="room-code-input">Room code</label>
+              <div class="online-actions online-actions--join">
+                <input id="room-code-input" class="field-input field-input--code" type="text" maxlength="6"
+                  inputmode="text" autocomplete="off" spellcheck="false" placeholder="ROOM CODE"
+                  aria-label="Room code" />
+                <button id="copy-room-code-btn" class="button button--ghost button--compact" type="button">Copy code</button>
+              </div>
+              <div id="created-room" class="online-room-meta" hidden>
+                <span>Created room ready</span>
+              </div>
+              <p class="menu-note" id="room-status" aria-live="polite">Use the database buttons to create or join a room.</p>
+            </div>
+
             <p class="menu-note" id="onlineNote">Moves are validated by the game server. Undo and pause are not
               available
               online.</p>
@@ -58790,6 +58813,122 @@ async function copyRoomCode(code) {
   return clean;
 }
 
+let currentRoom = null;
+
+function getRoomElements() {
+  return {
+    createBtn: document.getElementById('create-room-btn'),
+    joinBtn: document.getElementById('join-room-btn'),
+    copyBtn: document.getElementById('copy-room-code-btn'),
+    codeInput: document.getElementById('room-code-input'),
+    codeDisplay: document.getElementById('room-code-display'),
+    createdRoom: document.getElementById('created-room'),
+    status: document.getElementById('room-status'),
+  };
+}
+
+function setRoomStatus(message) {
+  const { status } = getRoomElements();
+  if (status) status.textContent = message;
+}
+
+function getCurrentRoom() {
+  return currentRoom;
+}
+
+async function authenticateForRoom() {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    setRoomStatus('Supabase is not available.');
+    return null;
+  }
+
+  const user = await authenticatePlayer(supabase);
+  if (!user) setRoomStatus('Authentication failed.');
+  return user;
+}
+
+/** Bind the optional RPC room panel. These IDs are separate from the main online controls. */
+function bindRoomControls() {
+  const els = getRoomElements();
+  const required = ['createBtn', 'joinBtn', 'copyBtn', 'codeInput', 'codeDisplay', 'createdRoom', 'status'];
+  if (required.some((key) => !els[key])) return;
+  if (els.createBtn.dataset.crownOakRoomBound === 'true') return;
+  els.createBtn.dataset.crownOakRoomBound = 'true';
+
+  els.createBtn.addEventListener('click', async () => {
+    setRoomStatus('Creating room...');
+    try {
+      const user = await authenticateForRoom();
+      if (!user) return;
+
+      const result = await createRoomViaRpc();
+      if (!result?.code) {
+        setRoomStatus('Database rooms are unavailable — use the main Create room button.');
+        return;
+      }
+
+      currentRoom = result.data;
+      els.codeDisplay.textContent = result.code;
+      els.createdRoom.hidden = false;
+      els.createdRoom.style.display = 'block';
+      setRoomStatus('Room created! Waiting for another player.');
+      console.log('Created room:', result.data);
+    } catch (error) {
+      console.error(error);
+      setRoomStatus(error.message || 'Unable to create room.');
+    }
+  });
+
+  els.joinBtn.addEventListener('click', async () => {
+    const code = normalizeRoomCode(els.codeInput.value);
+    if (code.length !== 6) {
+      setRoomStatus('Enter a valid 6-character room code.');
+      return;
+    }
+    els.codeInput.value = code;
+
+    setRoomStatus('Joining room...');
+    try {
+      const user = await authenticateForRoom();
+      if (!user) return;
+
+      const result = await joinRoomViaRpc(code);
+      if (!result) {
+        setRoomStatus('Database rooms are unavailable — use the main Join field.');
+        return;
+      }
+
+      currentRoom = result.data;
+      els.codeDisplay.textContent = result.code || code;
+      els.createdRoom.hidden = false;
+      els.createdRoom.style.display = 'block';
+      setRoomStatus('You joined the room successfully!');
+      console.log('Joined room:', result.data);
+    } catch (error) {
+      console.error(error);
+      setRoomStatus(error.message || 'Unable to join room.');
+    }
+  });
+
+  els.copyBtn.addEventListener('click', async () => {
+    const code = normalizeRoomCode(els.codeDisplay.textContent) || normalizeRoomCode(els.codeInput.value);
+    try {
+      await copyRoomCode(code);
+      setRoomStatus('Room code copied!');
+    } catch (error) {
+      setRoomStatus('Unable to copy code.');
+      console.error(error);
+    }
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bindRoomControls, { once: true });
+} else {
+  bindRoomControls();
+}
+
 if (globalThis.supabase?.createClient) {
   // main.js reads this before it creates the Supabase Realtime transport.
   globalThis.__CROWN_OAK_SUPABASE_CONFIG__ = SUPABASE_CONFIG;
@@ -58799,7 +58938,7 @@ if (globalThis.supabase?.createClient) {
 
 
 
-Object.assign(exports, { SUPABASE_CONFIG, authenticatePlayer, getSupabaseClient, createRoomViaRpc, joinRoomViaRpc, copyRoomCode, normalizeRoomCode });
+Object.assign(exports, { SUPABASE_CONFIG, authenticatePlayer, getSupabaseClient, createRoomViaRpc, joinRoomViaRpc, copyRoomCode, normalizeRoomCode, bindRoomControls, getCurrentRoom });
 
   });
 

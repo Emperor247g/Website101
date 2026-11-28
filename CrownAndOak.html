@@ -1977,7 +1977,8 @@ button:focus-visible {
               </div>
               <p class="field-hint">Optional Supabase RPC room registration.</p>
               <div class="online-actions">
-                <button id="create-room-btn" class="button button--cream button--compact" type="button">Create room</button>
+                <button id="create-room-btn" class="button button--cream button--compact" type="button">Create
+                  room</button>
                 <button id="join-room-btn" class="button button--ghost button--compact" type="button">Join room</button>
               </div>
               <label class="field-label field-label--joined" for="room-code-input">Room code</label>
@@ -1985,12 +1986,14 @@ button:focus-visible {
                 <input id="room-code-input" class="field-input field-input--code" type="text" maxlength="6"
                   inputmode="text" autocomplete="off" spellcheck="false" placeholder="ROOM CODE"
                   aria-label="Room code" />
-                <button id="copy-room-code-btn" class="button button--ghost button--compact" type="button">Copy code</button>
+                <button id="copy-room-code-btn" class="button button--ghost button--compact" type="button">Copy
+                  code</button>
               </div>
               <div id="created-room" class="online-room-meta" hidden>
                 <span>Created room ready</span>
               </div>
-              <p class="menu-note" id="room-status" aria-live="polite">Use the database buttons to create or join a room.</p>
+              <p class="menu-note" id="room-status" aria-live="polite">Use the database buttons to create or join a
+                room.</p>
             </div>
 
             <p class="menu-note" id="onlineNote">Moves are validated by the game server. Undo and pause are not
@@ -58699,6 +58702,47 @@ function subscribeToRoom(roomId) {
         roomStatus.textContent = "Realtime connection error.";
       }
     });
+}
+
+async function syncGameMove(boardState) {
+  if (!currentRoom || currentRoom.status !== "playing") {
+    console.error("No active online room");
+    return false;
+
+  }
+  const { data, error: sessionError } =
+    await supabaseClient.auth.getSession();
+
+  if (sessionError || !data.session) {
+    console.error("Player is not authenticated");
+    return false;
+  }
+  const playerId = data.session.user.id;
+  let nextPlayerId;
+
+  if (playerId === currentRoom.host_id) {
+    nextPlayerId = currentRoom.guest_id;
+  }
+  else if (playerId === currentRoom.guest_id) {
+    nextPlayerId = currentRoom.host_id;
+  } else {
+    console.error("Player is not part of this room");
+    return false;
+  }
+
+  const { data: updateRoom, error } =
+    await supabaseClient.rpc("save_game_state", {
+      p_room_id: currentRoom.id,
+      p_board_state: boardState,
+      p_next_turn: nextPlayerId
+    });
+  if (error) {
+    console.error("Move synchronization failed:", error.message);
+    return false;
+  }
+  currentRoom = updateRoom;
+  console.log("Game state synchronized");
+  return true;
 }
 
 // Create room

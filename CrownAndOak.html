@@ -1929,45 +1929,6 @@ button:focus-visible {
           <section class="menu-section" id="onlineSection">
             <div class="section-heading">
               <p class="eyebrow">Online match</p>
-              <span class="section-value" id="onlineStatusValue">Offline</span>
-            </div>
-
-            <label class="field-label" for="onlineServer">Game server</label>
-            <input id="onlineServer" class="field-input" type="text" inputmode="url" spellcheck="false"
-              autocomplete="off" placeholder="wss://your-server.example" aria-label="Game server WebSocket URL" />
-            <p class="field-hint" id="onlineServerHint">WS or WSS URL. Local servers use ws://localhost:8787.</p>
-
-            <label class="field-label" for="onlineNickname">Display name</label>
-            <input id="onlineNickname" class="field-input" type="text" maxlength="24" autocomplete="nickname"
-              placeholder="Player" aria-label="Display name" />
-
-            <div class="online-actions">
-              <button id="onlineCreate" class="button button--cream button--compact" type="button">Create room</button>
-              <button id="onlineConnect" class="button button--ghost button--compact" type="button">Connect</button>
-            </div>
-
-            <label class="field-label field-label--joined" for="onlineCode">Join a room</label>
-            <div class="online-actions online-actions--join">
-              <input id="onlineCode" class="field-input field-input--code" type="text" maxlength="6" inputmode="text"
-                autocomplete="off" spellcheck="false" placeholder="ROOM CODE" aria-label="Room code" />
-              <button id="onlineJoin" class="button button--ghost button--compact" type="button">Join</button>
-            </div>
-
-            <div id="onlineRoom" class="online-room" hidden>
-              <div class="online-room-head">
-                <span>Your room</span>
-                <strong id="onlineRoomCode">------</strong>
-              </div>
-              <div class="online-room-meta">
-                <span>You play <strong id="onlineColor">White</strong></span>
-                <span id="onlineOpponent">Waiting for opponent…</span>
-              </div>
-              <div class="online-actions">
-                <button id="onlineCopy" class="button button--ghost button--compact" type="button">Copy invite</button>
-                <button id="onlineRematch" class="button button--ghost button--compact" type="button"
-                  disabled>Rematch</button>
-              </div>
-              <button id="onlineLeave" class="button button--ghost button--compact" type="button">Leave room</button>
             </div>
 
             <div class="online-room" id="roomTools">
@@ -1975,7 +1936,7 @@ button:focus-visible {
                 <span>Database room</span>
                 <strong id="room-code-display">------</strong>
               </div>
-              <p class="field-hint">Optional Supabase RPC room registration.</p>
+              <p class="field-hint">Create a room to invite a friend, or join with their room code.</p>
               <div class="online-actions">
                 <button id="create-room-btn" class="button button--cream button--compact" type="button">Create
                   room</button>
@@ -1996,9 +1957,8 @@ button:focus-visible {
                 room.</p>
             </div>
 
-            <p class="menu-note" id="onlineNote">Moves are validated by the game server. Undo and pause are not
-              available
-              online.</p>
+            <p class="menu-note" id="onlineNote">Database rooms save game state through Supabase. Undo and pause are
+              not available online.</p>
           </section>
 
           <section class="menu-section">
@@ -58684,7 +58644,6 @@ function subscribeToRoom(roomId) {
           roomStatus.textContent = "Game finished.";
         }
 
-        // We'll connect the board rendering here in Step 10
         if (typeof handleRoomUpdate === "function") {
           handleRoomUpdate(payload.new);
         }
@@ -58775,7 +58734,7 @@ createRoomBtn.addEventListener("click", async () => {
   console.log("Created room:", data);
 });
 
-// Join room
+
 joinRoomBtn.addEventListener("click", async () => {
   const code = roomCodeInput.value.trim().toUpperCase();
 
@@ -58811,7 +58770,7 @@ joinRoomBtn.addEventListener("click", async () => {
   console.log("Joined room:", data);
 });
 
-// Copy room code
+
 copyRoomCodeBtn.addEventListener("click", async () => {
   const code = roomCodeDisplay.textContent;
 
@@ -58824,11 +58783,7 @@ copyRoomCodeBtn.addEventListener("click", async () => {
   }
 });
 
-// ==============================
-// CROWN & OAK COMPATIBILITY LAYER
-// ==============================
-// The room panel above uses bare `supabaseClient` / `authenticatePlayer()`.
-// main.js imports the helpers below, so both APIs stay available.
+
 
 const SUPABASE_URL = 'https://kfzjikhynazkojqxyyhw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_hOYd-U2WZFLIS0sloJJpfA_Bm84WsPt';
@@ -59007,8 +58962,7 @@ function getCurrentRoom() {
 }
 
 function bindRoomControls() {
-  // The listeners above are bound when this module loads; this export exists
-  // so main.js and the standalone bundle can call it safely.
+
   for (const button of [createRoomBtn, joinRoomBtn, copyRoomCodeBtn]) {
     if (button) button.dataset.crownOakRoomBound = 'true';
   }
@@ -61097,7 +61051,7 @@ function handleOnlineEvent(message) {
 
 async function connectOnline(action = 'connect', code = '') {
   if (!ui.net) return;
-  const nickname = els.onlineNickname.value.trim() || 'Player';
+  const nickname = (els.onlineNickname?.value || '').trim() || onlinePrefs.nickname || 'Player';
   ui.netConnecting = true;
   ui.netStatus = 'connecting';
   updateUI();
@@ -61122,21 +61076,21 @@ async function connectOnline(action = 'connect', code = '') {
 
   try {
     if (supabaseConfigured()) {
-      saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() });
+      saveOnlinePrefs({ nickname });
       await ui.net.connect();
     } else {
-      const raw = els.onlineServer.value.trim() || defaultServerUrl();
+      const raw = (els.onlineServer?.value || '').trim() || defaultServerUrl();
       const url = normalizeServerUrl(raw);
       if (!url) {
         ui.netConnecting = false;
         ui.netStatus = 'error';
         updateUI();
         toast('Enter a valid ws:// or wss:// server URL');
-        els.onlineServer.focus();
+        els.onlineServer?.focus();
         return;
       }
-      els.onlineServer.value = url;
-      saveOnlinePrefs({ server: url, nickname: els.onlineNickname.value.trim() });
+      if (els.onlineServer) els.onlineServer.value = url;
+      saveOnlinePrefs({ server: url, nickname });
       await ui.net.connect(url);
     }
   } catch (error) {
@@ -61165,14 +61119,14 @@ function createOnlineRoom() {
   connectOnline('create');
 }
 
-function joinOnlineRoom() {
-  const code = formatRoomCode(els.onlineCode.value);
-  if (code.length !== 6) {
+function joinOnlineRoom(code = '') {
+  const clean = code || formatRoomCode(els.onlineCode?.value || '');
+  if (clean.length !== 6) {
     toast('Room codes are six characters');
-    els.onlineCode.focus();
+    els.onlineCode?.focus();
     return;
   }
-  connectOnline('join', code);
+  connectOnline('join', clean);
 }
 
 function leaveOnlineRoom({ silent = false } = {}) {
@@ -61195,6 +61149,7 @@ async function copyInviteLink() {
     await navigator.clipboard.writeText(url.toString());
     toast('Invite link copied', { gold: true });
   } catch {
+    if (!els.onlineCode) return;
     els.onlineCode.value = formatRoomCode(ui.net.code);
     els.onlineCode.focus();
     els.onlineCode.select();
@@ -61685,8 +61640,8 @@ function setMode(mode) {
   if (mode === 'ai') toast('Playing against the computer', { gold: true });
   else if (mode === 'pvp') toast('Two player mode', { gold: true });
   else {
-    toast('Play Online — create or join a room', { gold: true });
-    els.onlineServer.focus({ preventScroll: true });
+    toast('Play Online — create or join a database room', { gold: true });
+    els.onlineServer?.focus({ preventScroll: true });
   }
 }
 
@@ -61751,23 +61706,23 @@ function bindEvents() {
   });
   els.soundToggle.addEventListener('click', () => setSound(!sound.enabled));
 
-  els.onlineCreate.addEventListener('click', () => {
+  els.onlineCreate?.addEventListener('click', () => {
     sound.ui();
     createOnlineRoom();
   });
-  els.onlineConnect.addEventListener('click', () => {
+  els.onlineConnect?.addEventListener('click', () => {
     sound.ui();
     connectOnline('connect');
   });
-  els.onlineJoin.addEventListener('click', () => {
+  els.onlineJoin?.addEventListener('click', () => {
     sound.ui();
     joinOnlineRoom();
   });
-  els.onlineCopy.addEventListener('click', () => {
+  els.onlineCopy?.addEventListener('click', () => {
     sound.ui();
     copyInviteLink();
   });
-  els.onlineRematch.addEventListener('click', () => {
+  els.onlineRematch?.addEventListener('click', () => {
     sound.ui();
     if (!ui.net?.inRoom) return;
     ui.rematchRequested = true;
@@ -61775,12 +61730,12 @@ function bindEvents() {
     updateUI();
     toast('Rematch requested — waiting for your opponent');
   });
-  els.onlineLeave.addEventListener('click', () => {
+  els.onlineLeave?.addEventListener('click', () => {
     sound.ui();
     leaveOnlineRoom();
   });
-  els.onlineServer.addEventListener('input', () => updateUI());
-  els.onlineServer.addEventListener('change', () => {
+  els.onlineServer?.addEventListener('input', () => updateUI());
+  els.onlineServer?.addEventListener('change', () => {
     const url = normalizeServerUrl(els.onlineServer.value);
     if (url) {
       els.onlineServer.value = url;
@@ -61788,18 +61743,18 @@ function bindEvents() {
     }
     updateUI();
   });
-  els.onlineNickname.addEventListener('change', () => saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() }));
-  els.onlineCode.addEventListener('input', () => {
+  els.onlineNickname?.addEventListener('change', () => saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() }));
+  els.onlineCode?.addEventListener('input', () => {
     els.onlineCode.value = els.onlineCode.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     updateUI();
   });
-  els.onlineCode.addEventListener('keydown', (event) => {
+  els.onlineCode?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       joinOnlineRoom();
     }
   });
-  els.onlineServer.addEventListener('keydown', (event) => {
+  els.onlineServer?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       createOnlineRoom();
@@ -61972,13 +61927,13 @@ async function init() {
     ui.mode = 'online';
     settings.mode = 'online';
     saveSettings();
-    els.onlineCode.value = inviteRoom;
+    if (els.onlineCode) els.onlineCode.value = inviteRoom;
   }
 
-  if (!supabaseConfigured()) {
+  if (!supabaseConfigured() && els.onlineServer) {
     els.onlineServer.value = normalizeServerUrl(onlinePrefs.server) || defaultServerUrl();
   }
-  els.onlineNickname.value = onlinePrefs.nickname || '';
+  if (els.onlineNickname) els.onlineNickname.value = onlinePrefs.nickname || '';
 
   try {
     scene = new CheckersScene(els.canvas);

@@ -165,45 +165,6 @@
           <section class="menu-section" id="onlineSection">
             <div class="section-heading">
               <p class="eyebrow">Online match</p>
-              <span class="section-value" id="onlineStatusValue">Offline</span>
-            </div>
-
-            <label class="field-label" for="onlineServer">Game server</label>
-            <input id="onlineServer" class="field-input" type="text" inputmode="url" spellcheck="false"
-              autocomplete="off" placeholder="wss://your-server.example" aria-label="Game server WebSocket URL" />
-            <p class="field-hint" id="onlineServerHint">WS or WSS URL. Local servers use ws://localhost:8787.</p>
-
-            <label class="field-label" for="onlineNickname">Display name</label>
-            <input id="onlineNickname" class="field-input" type="text" maxlength="24" autocomplete="nickname"
-              placeholder="Player" aria-label="Display name" />
-
-            <div class="online-actions">
-              <button id="onlineCreate" class="button button--cream button--compact" type="button">Create room</button>
-              <button id="onlineConnect" class="button button--ghost button--compact" type="button">Connect</button>
-            </div>
-
-            <label class="field-label field-label--joined" for="onlineCode">Join a room</label>
-            <div class="online-actions online-actions--join">
-              <input id="onlineCode" class="field-input field-input--code" type="text" maxlength="6" inputmode="text"
-                autocomplete="off" spellcheck="false" placeholder="ROOM CODE" aria-label="Room code" />
-              <button id="onlineJoin" class="button button--ghost button--compact" type="button">Join</button>
-            </div>
-
-            <div id="onlineRoom" class="online-room" hidden>
-              <div class="online-room-head">
-                <span>Your room</span>
-                <strong id="onlineRoomCode">------</strong>
-              </div>
-              <div class="online-room-meta">
-                <span>You play <strong id="onlineColor">White</strong></span>
-                <span id="onlineOpponent">Waiting for opponent…</span>
-              </div>
-              <div class="online-actions">
-                <button id="onlineCopy" class="button button--ghost button--compact" type="button">Copy invite</button>
-                <button id="onlineRematch" class="button button--ghost button--compact" type="button"
-                  disabled>Rematch</button>
-              </div>
-              <button id="onlineLeave" class="button button--ghost button--compact" type="button">Leave room</button>
             </div>
 
             <div class="online-room" id="roomTools">
@@ -211,7 +172,7 @@
                 <span>Database room</span>
                 <strong id="room-code-display">------</strong>
               </div>
-              <p class="field-hint">Optional Supabase RPC room registration.</p>
+              <p class="field-hint">Create a room to invite a friend, or join with their room code.</p>
               <div class="online-actions">
                 <button id="create-room-btn" class="button button--cream button--compact" type="button">Create
                   room</button>
@@ -232,9 +193,8 @@
                 room.</p>
             </div>
 
-            <p class="menu-note" id="onlineNote">Moves are validated by the game server. Undo and pause are not
-              available
-              online.</p>
+            <p class="menu-note" id="onlineNote">Database rooms save game state through Supabase. Undo and pause are
+              not available online.</p>
           </section>
 
           <section class="menu-section">

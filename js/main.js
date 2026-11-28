@@ -154,6 +154,7 @@ const ui = {
   netVersion: 0,
   netConnecting: false,
   pendingMove: null,
+  optimisticMove: null,
   rematchRequested: false,
   aiToken: 0,
   actionToken: 0,
@@ -685,6 +686,7 @@ function applyAuthoritativeState(state, version) {
   ui.netVersion = Number.isFinite(Number(version)) ? Number(version) : 0;
   ui.busy = false;
   ui.pendingMove = null;
+  ui.optimisticMove = null;
   ui.thinking = false;
   ui.hintThinking = false;
   ui.gameOverShown = false;
@@ -721,6 +723,35 @@ function applyOnlineStep(message) {
     return;
   }
 
+  const optimistic = ui.optimisticMove;
+  const matched = optimistic
+    && optimistic.version === version
+    && optimistic.from === from
+    && optimistic.to === to;
+
+  if (optimistic && matched) {
+    // Already applied and animated locally when the move was sent; only the
+    // authoritative version/players need reconciling. No second animation.
+    ui.optimisticMove = null;
+    ui.netVersion = version;
+    ui.busy = false;
+    if (message.by === ui.net?.color) ui.pendingMove = null;
+    if (message.state) updateNetPlayers(message.state.players);
+    scene.setLastMove(game.lastMove);
+    updateUI();
+    if (game.status !== 'playing') handleGameOver();
+    return;
+  }
+
+  if (optimistic && message.state) {
+    // The host applied a different step than the one previewed locally.
+    // Discard the preview and adopt the authoritative snapshot.
+    ui.optimisticMove = null;
+    ui.pendingMove = null;
+    applyAuthoritativeState(message.state, version);
+    return;
+  }
+
   // The host has already validated this step. Apply it and restore input
   // immediately; the animation is purely visual and must never block play
   // (browsers throttle animation frames in background tabs).
@@ -751,9 +782,9 @@ function applyOnlineStep(message) {
   }
 
   if (result.pending) {
-    ui.selected = message.to;
-    ui.destinations = getOptionsFor(message.to);
-    scene.setSelection(message.to);
+    ui.selected = to;
+    ui.destinations = getOptionsFor(to);
+    scene.setSelection(to);
     scene.setDestinations(ui.destinations);
     toast('Capture continues — jump again', { gold: true });
   } else {
@@ -764,8 +795,8 @@ function applyOnlineStep(message) {
   if (game.status !== 'playing') handleGameOver();
 
   scene.animateStep({
-    from: message.from,
-    to: message.to,
+    from,
+    to,
     capture: result.capture,
     promoted: result.promoted,
   }).then(() => {
@@ -845,8 +876,9 @@ function handleOnlineEvent(message) {
       break;
     case 'error':
       ui.netConnecting = false;
-      if (ui.pendingMove) {
+      if (ui.pendingMove || ui.optimisticMove) {
         ui.pendingMove = null;
+        ui.optimisticMove = null;
         ui.busy = false;
         ui.net?.requestState();
       }
@@ -989,11 +1021,50 @@ async function performStep(from, to) {
     }
 
     ui.actionToken += 1;
+    const token = ui.actionToken;
     clearHint();
+
+    // Animate locally before the host confirms so the piece responds to the
+    // tap immediately. The host result remains authoritative; if it differs
+    // or the request fails, applyOnlineStep()/the error handler reconcile it.
+    const optimistic = game.step(from, to);
+    if (!optimistic.ok) {
+      sound.invalid();
+      toast(optimistic.reason || 'Illegal move');
+      updateUI();
+      return;
+    }
+
     ui.busy = true;
     ui.pendingMove = { from, to };
+    ui.optimisticMove = { from, to, version: ui.netVersion + 1, result: optimistic };
     clearSelection();
+    scene.setLastMove(game.lastMove);
     updateUI();
+
+    if (optimistic.capture !== null) sound.capture();
+    else sound.move();
+    if (optimistic.promoted) {
+      window.setTimeout(() => {
+        if (ui.actionToken === token) sound.promote();
+      }, 340);
+    }
+    if (optimistic.pending) {
+      ui.selected = to;
+      ui.destinations = getOptionsFor(to);
+      scene.setSelection(to);
+      scene.setDestinations(ui.destinations);
+    }
+
+    scene.animateStep({
+      from,
+      to,
+      capture: optimistic.capture,
+      promoted: optimistic.promoted,
+    }).then(() => {
+      if (ui.actionToken === token) scene.setLastMove(game.lastMove);
+    }).catch(() => {});
+
     ui.net.sendMove(from, to);
     return;
   }
@@ -1399,6 +1470,7 @@ function resetGame({ announce = true, closeOverlays = true } = {}) {
   ui.destinations = [];
   ui.busy = false;
   ui.pendingMove = null;
+  ui.optimisticMove = null;
   ui.thinking = false;
   ui.hintThinking = false;
   ui.paused = false;

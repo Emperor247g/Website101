@@ -348,19 +348,19 @@ function updateOnlineUI() {
   els.onlineCopy.disabled = !canUseRoom;
   els.onlineRematch.disabled = !canUseRoom || game?.status === 'playing';
   els.onlineLeave.disabled = !inRoom;
-  els.onlineCreate.disabled = ui.netConnecting;
-  els.onlineJoin.disabled = ui.netConnecting || !els.onlineCode.value.trim();
+  if (els.onlineCreate) els.onlineCreate.disabled = ui.netConnecting;
+  if (els.onlineJoin) els.onlineJoin.disabled = ui.netConnecting || !els.onlineCode.value.trim();
 
   if (ui.mode !== 'online') {
-    els.onlineNote.textContent = 'Choose Play Online to create or join a validated two-player match.';
+    els.onlineNote.textContent = 'Choose Play Online to see your online match status.';
   } else if (supabaseConfigured()) {
     els.onlineNote.textContent = inRoom
       ? 'Moves are validated by the room host. Undo and pause are not available online.'
-      : 'Create a room and invite a friend, or enter their room code.';
+      : 'Create or join a room in the Database room panel below.';
   } else if (!ui.net?.url) {
-    els.onlineNote.textContent = 'Enter the WebSocket server URL, then create or join a room.';
+    els.onlineNote.textContent = 'Enter the WebSocket server URL to connect.';
   } else if (!inRoom) {
-    els.onlineNote.textContent = 'Create a room and invite a friend, or enter their room code.';
+    els.onlineNote.textContent = 'Create or join a room in the Database room panel below.';
   } else {
     els.onlineNote.textContent = 'Moves are validated by the server. Undo and pause are not available online.';
   }

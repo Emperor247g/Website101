@@ -854,7 +854,7 @@ function handleOnlineEvent(message) {
 
 async function connectOnline(action = 'connect', code = '') {
   if (!ui.net) return;
-  const nickname = els.onlineNickname.value.trim() || 'Player';
+  const nickname = (els.onlineNickname?.value || '').trim() || onlinePrefs.nickname || 'Player';
   ui.netConnecting = true;
   ui.netStatus = 'connecting';
   updateUI();
@@ -879,21 +879,21 @@ async function connectOnline(action = 'connect', code = '') {
 
   try {
     if (supabaseConfigured()) {
-      saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() });
+      saveOnlinePrefs({ nickname });
       await ui.net.connect();
     } else {
-      const raw = els.onlineServer.value.trim() || defaultServerUrl();
+      const raw = (els.onlineServer?.value || '').trim() || defaultServerUrl();
       const url = normalizeServerUrl(raw);
       if (!url) {
         ui.netConnecting = false;
         ui.netStatus = 'error';
         updateUI();
         toast('Enter a valid ws:// or wss:// server URL');
-        els.onlineServer.focus();
+        els.onlineServer?.focus();
         return;
       }
-      els.onlineServer.value = url;
-      saveOnlinePrefs({ server: url, nickname: els.onlineNickname.value.trim() });
+      if (els.onlineServer) els.onlineServer.value = url;
+      saveOnlinePrefs({ server: url, nickname });
       await ui.net.connect(url);
     }
   } catch (error) {
@@ -922,14 +922,14 @@ function createOnlineRoom() {
   connectOnline('create');
 }
 
-function joinOnlineRoom() {
-  const code = formatRoomCode(els.onlineCode.value);
-  if (code.length !== 6) {
+function joinOnlineRoom(code = '') {
+  const clean = code || formatRoomCode(els.onlineCode?.value || '');
+  if (clean.length !== 6) {
     toast('Room codes are six characters');
-    els.onlineCode.focus();
+    els.onlineCode?.focus();
     return;
   }
-  connectOnline('join', code);
+  connectOnline('join', clean);
 }
 
 function leaveOnlineRoom({ silent = false } = {}) {
@@ -952,6 +952,7 @@ async function copyInviteLink() {
     await navigator.clipboard.writeText(url.toString());
     toast('Invite link copied', { gold: true });
   } catch {
+    if (!els.onlineCode) return;
     els.onlineCode.value = formatRoomCode(ui.net.code);
     els.onlineCode.focus();
     els.onlineCode.select();
@@ -1442,8 +1443,8 @@ function setMode(mode) {
   if (mode === 'ai') toast('Playing against the computer', { gold: true });
   else if (mode === 'pvp') toast('Two player mode', { gold: true });
   else {
-    toast('Play Online — create or join a room', { gold: true });
-    els.onlineServer.focus({ preventScroll: true });
+    toast('Play Online — create or join a database room', { gold: true });
+    els.onlineServer?.focus({ preventScroll: true });
   }
 }
 
@@ -1508,23 +1509,23 @@ function bindEvents() {
   });
   els.soundToggle.addEventListener('click', () => setSound(!sound.enabled));
 
-  els.onlineCreate.addEventListener('click', () => {
+  els.onlineCreate?.addEventListener('click', () => {
     sound.ui();
     createOnlineRoom();
   });
-  els.onlineConnect.addEventListener('click', () => {
+  els.onlineConnect?.addEventListener('click', () => {
     sound.ui();
     connectOnline('connect');
   });
-  els.onlineJoin.addEventListener('click', () => {
+  els.onlineJoin?.addEventListener('click', () => {
     sound.ui();
     joinOnlineRoom();
   });
-  els.onlineCopy.addEventListener('click', () => {
+  els.onlineCopy?.addEventListener('click', () => {
     sound.ui();
     copyInviteLink();
   });
-  els.onlineRematch.addEventListener('click', () => {
+  els.onlineRematch?.addEventListener('click', () => {
     sound.ui();
     if (!ui.net?.inRoom) return;
     ui.rematchRequested = true;
@@ -1532,12 +1533,12 @@ function bindEvents() {
     updateUI();
     toast('Rematch requested — waiting for your opponent');
   });
-  els.onlineLeave.addEventListener('click', () => {
+  els.onlineLeave?.addEventListener('click', () => {
     sound.ui();
     leaveOnlineRoom();
   });
-  els.onlineServer.addEventListener('input', () => updateUI());
-  els.onlineServer.addEventListener('change', () => {
+  els.onlineServer?.addEventListener('input', () => updateUI());
+  els.onlineServer?.addEventListener('change', () => {
     const url = normalizeServerUrl(els.onlineServer.value);
     if (url) {
       els.onlineServer.value = url;
@@ -1545,18 +1546,18 @@ function bindEvents() {
     }
     updateUI();
   });
-  els.onlineNickname.addEventListener('change', () => saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() }));
-  els.onlineCode.addEventListener('input', () => {
+  els.onlineNickname?.addEventListener('change', () => saveOnlinePrefs({ nickname: els.onlineNickname.value.trim() }));
+  els.onlineCode?.addEventListener('input', () => {
     els.onlineCode.value = els.onlineCode.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     updateUI();
   });
-  els.onlineCode.addEventListener('keydown', (event) => {
+  els.onlineCode?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       joinOnlineRoom();
     }
   });
-  els.onlineServer.addEventListener('keydown', (event) => {
+  els.onlineServer?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       createOnlineRoom();
@@ -1729,13 +1730,13 @@ async function init() {
     ui.mode = 'online';
     settings.mode = 'online';
     saveSettings();
-    els.onlineCode.value = inviteRoom;
+    if (els.onlineCode) els.onlineCode.value = inviteRoom;
   }
 
-  if (!supabaseConfigured()) {
+  if (!supabaseConfigured() && els.onlineServer) {
     els.onlineServer.value = normalizeServerUrl(onlinePrefs.server) || defaultServerUrl();
   }
-  els.onlineNickname.value = onlinePrefs.nickname || '';
+  if (els.onlineNickname) els.onlineNickname.value = onlinePrefs.nickname || '';
 
   try {
     scene = new CheckersScene(els.canvas);

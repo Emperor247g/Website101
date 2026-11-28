@@ -55,7 +55,6 @@ function subscribeToRoom(roomId) {
           roomStatus.textContent = "Game finished.";
         }
 
-        // We'll connect the board rendering here in Step 10
         if (typeof handleRoomUpdate === "function") {
           handleRoomUpdate(payload.new);
         }
@@ -139,14 +138,21 @@ createRoomBtn.addEventListener("click", async () => {
   subscribeToRoom(data.id);
 
   roomCodeDisplay.textContent = data.room_code;
+  createdRoomDiv.hidden = false;
   createdRoomDiv.style.display = "block";
 
   roomStatus.textContent = "Room created! Waiting for another player.";
 
   console.log("Created room:", data);
+
+  // Hand the database room to the game's Realtime transport so the room
+  // status panel, playing color, opponent name and board all go live.
+  window.dispatchEvent(new CustomEvent("crown-oak:database-room", {
+    detail: { action: "create", code: data.room_code, room: data },
+  }));
 });
 
-// Join room
+
 joinRoomBtn.addEventListener("click", async () => {
   const code = roomCodeInput.value.trim().toUpperCase();
 
@@ -180,9 +186,13 @@ joinRoomBtn.addEventListener("click", async () => {
   roomStatus.textContent = "You joined the room successfully!";
 
   console.log("Joined room:", data);
+
+  window.dispatchEvent(new CustomEvent("crown-oak:database-room", {
+    detail: { action: "join", code: data.room_code || code, room: data },
+  }));
 });
 
-// Copy room code
+
 copyRoomCodeBtn.addEventListener("click", async () => {
   const code = roomCodeDisplay.textContent;
 
@@ -195,11 +205,7 @@ copyRoomCodeBtn.addEventListener("click", async () => {
   }
 });
 
-// ==============================
-// CROWN & OAK COMPATIBILITY LAYER
-// ==============================
-// The room panel above uses bare `supabaseClient` / `authenticatePlayer()`.
-// main.js imports the helpers below, so both APIs stay available.
+
 
 const SUPABASE_URL = 'https://kfzjikhynazkojqxyyhw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_hOYd-U2WZFLIS0sloJJpfA_Bm84WsPt';
@@ -378,8 +384,7 @@ function getCurrentRoom() {
 }
 
 function bindRoomControls() {
-  // The listeners above are bound when this module loads; this export exists
-  // so main.js and the standalone bundle can call it safely.
+
   for (const button of [createRoomBtn, joinRoomBtn, copyRoomCodeBtn]) {
     if (button) button.dataset.crownOakRoomBound = 'true';
   }

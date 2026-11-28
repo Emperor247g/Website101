@@ -853,7 +853,7 @@ function handleOnlineEvent(message) {
   }
 }
 
-async function connectOnline(action = 'connect', code = '') {
+async function connectOnline(action = 'connect', code = '', databaseRoom = null) {
   if (!ui.net) return;
   const nickname = (els.onlineNickname?.value || '').trim() || onlinePrefs.nickname || 'Player';
   ui.netConnecting = true;
@@ -861,8 +861,10 @@ async function connectOnline(action = 'connect', code = '') {
   updateUI();
 
   // Optional database-backed rooms. Missing RPCs fall back to the Realtime flow.
-  let rpcResult = null;
-  if (supabaseConfigured() && (action === 'create' || action === 'join')) {
+  // A room already registered by the Database room panel is passed in, so it
+  // is not created twice.
+  let rpcResult = databaseRoom;
+  if (!rpcResult && supabaseConfigured() && (action === 'create' || action === 'join')) {
     try {
       const config = getSupabaseConfig();
       rpcResult = action === 'create'
@@ -1509,6 +1511,25 @@ function bindEvents() {
     button.addEventListener('click', () => setDifficulty(button.dataset.difficulty));
   });
   els.soundToggle.addEventListener('click', () => setSound(!sound.enabled));
+
+  // The Database room panel registers the room through a Supabase RPC, then
+  // hands it to this listener. The Realtime transport owns the live match.
+  window.addEventListener('crown-oak:database-room', (event) => {
+    const detail = event.detail || {};
+    if (detail.action !== 'create' && detail.action !== 'join') return;
+    const code = formatRoomCode(detail.code || '');
+    if (code.length !== 6) {
+      toast('The database room did not provide a valid room code');
+      return;
+    }
+
+    if (ui.net?.inRoom) ui.net.clearRoom();
+    ui.mode = 'online';
+    settings.mode = 'online';
+    saveSettings();
+    updateUI();
+    connectOnline(detail.action, code, { code, data: detail.room || null });
+  });
 
   els.onlineCreate?.addEventListener('click', () => {
     sound.ui();

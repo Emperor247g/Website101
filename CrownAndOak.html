@@ -1929,6 +1929,33 @@ button:focus-visible {
           <section class="menu-section" id="onlineSection">
             <div class="section-heading">
               <p class="eyebrow">Online match</p>
+              <span class="section-value" id="onlineStatusValue">Offline</span>
+            </div>
+
+            <label class="field-label" for="onlineServer">Game server</label>
+            <input id="onlineServer" class="field-input" type="text" inputmode="url" spellcheck="false"
+              autocomplete="off" placeholder="wss://your-server.example" aria-label="Game server WebSocket URL" />
+            <p class="field-hint" id="onlineServerHint">WS or WSS URL. Local servers use ws://localhost:8787.</p>
+
+            <label class="field-label" for="onlineNickname">Display name</label>
+            <input id="onlineNickname" class="field-input" type="text" maxlength="24" autocomplete="nickname"
+              placeholder="Player" aria-label="Display name" />
+
+            <div id="onlineRoom" class="online-room" hidden>
+              <div class="online-room-head">
+                <span>Your room</span>
+                <strong id="onlineRoomCode">------</strong>
+              </div>
+              <div class="online-room-meta">
+                <span>You play <strong id="onlineColor">White</strong></span>
+                <span id="onlineOpponent">Waiting for opponent…</span>
+              </div>
+              <div class="online-actions">
+                <button id="onlineCopy" class="button button--ghost button--compact" type="button">Copy invite</button>
+                <button id="onlineRematch" class="button button--ghost button--compact" type="button"
+                  disabled>Rematch</button>
+              </div>
+              <button id="onlineLeave" class="button button--ghost button--compact" type="button">Leave room</button>
             </div>
 
             <div class="online-room" id="roomTools">
@@ -60545,19 +60572,19 @@ function updateOnlineUI() {
   els.onlineCopy.disabled = !canUseRoom;
   els.onlineRematch.disabled = !canUseRoom || game?.status === 'playing';
   els.onlineLeave.disabled = !inRoom;
-  els.onlineCreate.disabled = ui.netConnecting;
-  els.onlineJoin.disabled = ui.netConnecting || !els.onlineCode.value.trim();
+  if (els.onlineCreate) els.onlineCreate.disabled = ui.netConnecting;
+  if (els.onlineJoin) els.onlineJoin.disabled = ui.netConnecting || !els.onlineCode.value.trim();
 
   if (ui.mode !== 'online') {
-    els.onlineNote.textContent = 'Choose Play Online to create or join a validated two-player match.';
+    els.onlineNote.textContent = 'Choose Play Online to see your online match status.';
   } else if (supabaseConfigured()) {
     els.onlineNote.textContent = inRoom
       ? 'Moves are validated by the room host. Undo and pause are not available online.'
-      : 'Create a room and invite a friend, or enter their room code.';
+      : 'Create or join a room in the Database room panel below.';
   } else if (!ui.net?.url) {
-    els.onlineNote.textContent = 'Enter the WebSocket server URL, then create or join a room.';
+    els.onlineNote.textContent = 'Enter the WebSocket server URL to connect.';
   } else if (!inRoom) {
-    els.onlineNote.textContent = 'Create a room and invite a friend, or enter their room code.';
+    els.onlineNote.textContent = 'Create or join a room in the Database room panel below.';
   } else {
     els.onlineNote.textContent = 'Moves are validated by the server. Undo and pause are not available online.';
   }

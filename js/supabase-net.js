@@ -457,7 +457,10 @@ export class SupabaseNetClient {
   }
 
   _sendEvent(event) {
-    return this._send({ code: this.code, from: this.token, ...event });
+    // Routing fields are owned by the transport; event payloads must not be
+    // able to overwrite them (board move coordinates used to clobber `from`
+    // and `to`, which made every move_applied signal get filtered out).
+    return this._send({ ...event, code: event.code || this.code, from: this.token });
   }
 
   _sendError(message, errorCode, source = null) {
@@ -483,7 +486,8 @@ export class SupabaseNetClient {
   _onSignal(signal) {
     if (!signal || typeof signal.type !== 'string') return;
     if (this.code && signal.code && signal.code !== this.code) return;
-    if (signal.to && signal.to !== this.token && signal.to !== this.color) return;
+    // Routing targets are token/color strings; board coordinates are numbers.
+    if (typeof signal.to === 'string' && signal.to && signal.to !== this.token && signal.to !== this.color) return;
     if (COMMAND_TYPES.has(signal.type) && signal.from === this.token) return;
 
     this._settleRequest(signal);
@@ -737,11 +741,11 @@ export class SupabaseNetClient {
       this._sendError('Join a room before moving', 'not_in_room', source);
       return null;
     }
-    if (this.room.game.status !== 'playing') {
+    if (this.game.status !== 'playing') {
       this._sendError('The game is over', 'game_over', source);
       return null;
     }
-    if (this.room.game.currentPlayer !== player.color) {
+    if (this.game.currentPlayer !== player.color) {
       this._sendError('It is not your turn', 'not_your_turn', source);
       return null;
     }
@@ -750,7 +754,7 @@ export class SupabaseNetClient {
       return null;
     }
 
-    const result = this.room.game.step(from, to);
+    const result = this.game.step(from, to);
     if (!result.ok) {
       this._sendError(result.reason || 'Illegal move', 'illegal_move', source);
       return null;
@@ -766,12 +770,12 @@ export class SupabaseNetClient {
       replyTo: id,
       version: this.room.version,
       by: player.color,
-      from,
-      to,
+      moveFrom: from,
+      moveTo: to,
       capture: result.capture,
       promoted: result.promoted,
       pending: Boolean(result.pending),
-      forcedFrom: this.room.game.forcedFrom,
+      forcedFrom: this.game.forcedFrom,
       state: this._publicState(),
     });
     return result;
@@ -842,7 +846,7 @@ export class SupabaseNetClient {
 
   _handleRematchRequest(signal) {
     if (!this.host || !this.room) return;
-    if (this.room.game.status === 'playing') {
+    if (this.game.status === 'playing') {
       this._sendError('Finish the current game first', 'game_in_progress', signal);
       return;
     }
@@ -865,7 +869,7 @@ export class SupabaseNetClient {
     });
 
     if (this.room.rematchReady.size >= 2) {
-      this.room.game.reset();
+      this.game.reset();
       this.room.version += 1;
       this.room.rematchReady.clear();
       this._saveHostSnapshot();

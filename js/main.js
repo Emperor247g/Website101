@@ -711,19 +711,24 @@ function applyOnlineStep(message) {
     ui.net?.requestState();
     return;
   }
-  if (!Number.isInteger(message.from) || !Number.isInteger(message.to)) {
+  // Move coordinates travel as moveFrom/moveTo so they cannot collide with
+  // the transport's token-based from/to routing fields. Older peers may send
+  // the coordinates directly, so keep that fallback.
+  const from = Number.isInteger(message.moveFrom) ? message.moveFrom : message.from;
+  const to = Number.isInteger(message.moveTo) ? message.moveTo : message.to;
+  if (!Number.isInteger(from) || !Number.isInteger(to)) {
     ui.net?.requestState();
     return;
   }
 
-  // The server has already validated this step. Apply it and restore input
+  // The host has already validated this step. Apply it and restore input
   // immediately; the animation is purely visual and must never block play
   // (browsers throttle animation frames in background tabs).
   const token = ++ui.actionToken;
   clearHint();
   clearSelection();
 
-  const result = game.step(message.from, message.to);
+  const result = game.step(from, to);
   if (!result.ok) {
     ui.busy = false;
     ui.net?.requestState();

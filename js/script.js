@@ -75,6 +75,47 @@ function subscribeToRoom(roomId) {
     });
 }
 
+async function syncGameMove(boardState) {
+  if (!currentRoom || currentRoom.status !== "playing") {
+    console.error("No active online room");
+    return false;
+
+  }
+  const { data, error: sessionError } =
+    await supabaseClient.auth.getSession();
+
+  if (sessionError || !data.session) {
+    console.error("Player is not authenticated");
+    return false;
+  }
+  const playerId = data.session.user.id;
+  let nextPlayerId;
+
+  if (playerId === currentRoom.host_id) {
+    nextPlayerId = currentRoom.guest_id;
+  }
+  else if (playerId === currentRoom.guest_id) {
+    nextPlayerId = currentRoom.host_id;
+  } else {
+    console.error("Player is not part of this room");
+    return false;
+  }
+
+  const { data: updateRoom, error } =
+    await supabaseClient.rpc("save_game_state", {
+      p_room_id: currentRoom.id,
+      p_board_state: boardState,
+      p_next_turn: nextPlayerId
+    });
+  if (error) {
+    console.error("Move synchronization failed:", error.message);
+    return false;
+  }
+  currentRoom = updateRoom;
+  console.log("Game state synchronized");
+  return true;
+}
+
 // Create room
 createRoomBtn.addEventListener("click", async () => {
   roomStatus.textContent = "Creating room...";

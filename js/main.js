@@ -331,17 +331,18 @@ function updateOnlineUI() {
   els.onlineSection.classList.toggle('is-online', ui.mode === 'online');
 
   const inRoom = Boolean(ui.net?.code);
-  els.onlineRoom.hidden = !inRoom;
+  els.onlineRoom.hidden = false;
+  els.onlineColor.textContent = ui.net?.color === BLACK ? 'Black' : 'White';
   if (inRoom) {
     els.onlineRoomCode.textContent = formatRoomCode(ui.net.code);
-    els.onlineColor.textContent = ui.net.color === BLACK ? 'Black' : 'White';
     if (ui.net.opponentConnected === false) {
       els.onlineOpponent.textContent = ui.net.myConnected ? 'Opponent disconnected' : 'Waiting to reconnect…';
-    } else if (ui.net.opponentNickname) {
-      els.onlineOpponent.textContent = `Playing ${ui.net.opponentNickname}`;
     } else {
-      els.onlineOpponent.textContent = 'Waiting for opponent…';
+      els.onlineOpponent.textContent = ui.net.opponentNickname || 'Waiting for opponent…';
     }
+  } else {
+    els.onlineRoomCode.textContent = '------';
+    els.onlineOpponent.textContent = 'Waiting for opponent…';
   }
 
   const canUseRoom = inRoom && ui.net.connected;
